@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E-World Mascot 3D</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: "Pretendard", "Malgun Gothic", sans-serif; background: #ffe9f3; }
+    canvas { display: block; }
+    #ui {
+      position: fixed; left: 16px; top: 16px; padding: 14px 16px; border-radius: 14px;
+      background: rgba(255,255,255,.82); backdrop-filter: blur(6px); box-shadow: 0 6px 24px rgba(0,0,0,.12);
+      max-width: 260px; font-size: 13px; color: #333;
+    }
+    #ui h1 { margin: 0 0 8px; font-size: 16px; color: #e8457c; }
+    #ui .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    #ui button {
+      border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 12px;
+      background: #f2f2f2; color: #333; transition: transform .1s;
+    }
+    #ui button:hover { transform: translateY(-1px); background: #e8e8e8; }
+    #ui button.swatch { width: 26px; height: 26px; padding: 0; border: 2px solid #fff; box-shadow: 0 0 0 1px #ccc; }
+    #ui small { color: #777; line-height: 1.5; display: block; margin-top: 6px; }
+    #drop {
+      position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(232,69,124,.25); color: #fff; font-size: 28px; font-weight: bold; pointer-events: none;
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="ui">
+    <h1>🎡 E-World Mascot 3D</h1>
+    <div>몸 색상</div>
+    <div class="row" id="colors"></div>
+    <div class="row">
+      <button id="jump">점프!</button>
+      <button id="wave">손 흔들기</button>
+      <button id="spin">자동 회전</button>
+      <button id="shot">스크린샷</button>
+    </div>
+    <small>
+      드래그: 회전 · 휠: 줌 · 캐릭터 클릭: 점프<br />
+      공식 마스코트 .glb/.gltf 파일을 화면에 드래그하면 교체됩니다.
+    </small>
+  </div>
+  <div id="drop">GLB 파일을 놓으세요</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    // ---------- 기본 세팅 ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = makeGradientTexture('#ffd6e8', '#bfe4ff');
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.fog = new THREE.Fog('#ffe3f0', 14, 30);
+
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 2.4, 7.5);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.4, 0);
+    controls.enableDamping = true;
+    controls.minDistance = 3;
+    controls.maxDistance = 14;
+    controls.maxPolarAngle = Math.PI * 0.52;
+
+    // 조명
+    scene.add(new THREE.HemisphereLight('#ffffff', '#ffc2d9', 0.6));
+    const sun = new THREE.DirectionalLight('#fff4e0', 2.2);
+    sun.position.set(4, 8, 5);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -6;
+    sun.shadow.camera.right = sun.shadow.camera.top = 6;
+    sun.shadow.radius = 6;
+    scene.add(sun);
+    const rim = new THREE.DirectionalLight('#9fd3ff', 1.2);
+    rim.position.set(-5, 4, -5);
+    scene.add(rim);
+
+    // 바닥 (원형 무대)
+    const stage = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.2, 3.4, 0.3, 64),
+      new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4 })
+    );
+    stage.position.y = -0.15;
+    stage.receiveShadow = true;
+    scene.add(stage);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(3.3, 0.06, 16, 100),
+      new THREE.MeshStandardMaterial({ color: '#ff6fa1', emissive: '#ff6fa1', emissiveIntensity: 0.4 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.0;
+    scene.add(ring);
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(40, 64),
+      new THREE.MeshStandardMaterial({ color: '#ffe0ee', roughness: 1 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.3;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // 배경 소품: 관람차 + 타워 실루엣
+    scene.add(makeFerrisWheel());
+    scene.add(makeTower());
+
+    // ---------- 마스코트 ----------
+    const mats = {
+      body: new THREE.MeshPhysicalMaterial({ color: '#ff8fb8', roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.4, sheen: 0.5 }),
+      belly: new THREE.MeshStandardMaterial({ color: '#fff3f7', roughness: 0.6 }),
+      white: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.2 }),
+      black: new THREE.MeshPhysicalMaterial({ color: '#1d1a26', roughness: 0.1, clearcoat: 1 }),
+      cheek: new THREE.MeshStandardMaterial({ color: '#ff5d8f', roughness: 0.8, transparent: true, opacity: 0.6 }),
+      accent: new THREE.MeshPhysicalMaterial({ color: '#ffd23f', roughness: 0.3, clearcoat: 0.8 }),
+      blue: new THREE.MeshPhysicalMaterial({ color: '#4fb3ff', roughness: 0.3, clearcoat: 0.8 }),
+    };
+
+    const mascot = new THREE.Group();
+    const parts = buildMascot(mascot, mats);
+    scene.add(mascot);
+    let current = mascot;
+
+    function buildMascot(root, m) {
+      const S = (r, w = 48, h = 32) => new THREE.SphereGeometry(r, w, h);
+      const add = (parent, geo, mat, pos = [0, 0, 0], scale = [1, 1, 1]) => {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(...pos);
+        mesh.scale.set(...scale);
+        mesh.castShadow = true;
+        parent.add(mesh);
+        return mesh;
+      };
+
+      const bodyPivot = new THREE.Group();
+      root.add(bodyPivot);
+
+      // 몸통
+      add(bodyPivot, S(0.85), m.body, [0, 0.95, 0], [1, 0.95, 0.9]);
+      add(bodyPivot, S(0.6), m.belly, [0, 0.9, 0.33], [0.9, 0.9, 0.6]);
+
+      // 머리
+      const head = new THREE.Group();
+      head.position.set(0, 2.15, 0);
+      bodyPivot.add(head);
+      add(head, S(0.95), m.body, [0, 0, 0], [1.08, 0.95, 0.95]);
+      add(head, S(0.6), m.belly, [0, -0.22, 0.52], [1.1, 0.75, 0.6]); // 얼굴판
+
+      // 귀 (둥근 귀 + 안쪽)
+      const ears = [];
+      for (const s of [-1, 1]) {
+        const ear = new THREE.Group();
+        ear.position.set(0.68 * s, 0.68, 0);
+        ear.rotation.z = -0.35 * s;
+        head.add(ear);
+        add(ear, S(0.34), m.body, [0, 0.12, 0], [1, 1.15, 0.6]);
+        add(ear, S(0.2), m.cheek, [0, 0.12, 0.13], [1, 1.15, 0.4]);
+        ears.push(ear);
+      }
+
+      // 눈
+      const eyes = [];
+      for (const s of [-1, 1]) {
+        const eye = new THREE.Group();
+        eye.position.set(0.33 * s, 0.05, 0.82);
+        head.add(eye);
+        add(eye, S(0.17), m.black, [0, 0, 0], [0.85, 1.15, 0.5]);
+        add(eye, S(0.055), m.white, [0.04, 0.07, 0.07]);
+        add(eye, S(0.025), m.white, [-0.04, -0.06, 0.07]);
+        eyes.push(eye);
+      }
+
+      // 볼터치
+      for (const s of [-1, 1]) add(head, S(0.13), m.cheek, [0.6 * s, -0.22, 0.68], [1.2, 0.7, 0.3]);
+
+      // 코 + 입
+      add(head, S(0.07), m.black, [0, -0.15, 0.93], [1.3, 0.9, 0.8]);
+      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.022, 12, 32, Math.PI), m.black);
+      mouth.position.set(0, -0.28, 0.9);
+      mouth.rotation.z = Math.PI;
+      head.add(mouth);
+
+      // 모자 (테마파크 느낌의 작은 탑햇 + 별)
+      const hat = new THREE.Group();
+      hat.position.set(0.2, 0.85, 0.05);
+      hat.rotation.z = -0.2;
+      head.add(hat);
+      add(hat, new THREE.CylinderGeometry(0.42, 0.42, 0.05, 40), m.blue);
+      add(hat, new THREE.CylinderGeometry(0.27, 0.3, 0.4, 40), m.blue, [0, 0.22, 0]);
+      add(hat, new THREE.CylinderGeometry(0.305, 0.305, 0.08, 40), m.accent, [0, 0.08, 0]);
+      const star = add(hat, makeStarGeometry(0.13, 0.06, 0.05), m.accent, [0, 0.25, 0.28]);
+
+      // 팔
+      const arms = [];
+      for (const s of [-1, 1]) {
+        const shoulder = new THREE.Group();
+        shoulder.position.set(0.75 * s, 1.25, 0);
+        shoulder.rotation.z = 0.5 * s;
+        bodyPivot.add(shoulder);
+        add(shoulder, new THREE.CapsuleGeometry(0.17, 0.45, 8, 16), m.body, [0, -0.32, 0]);
+        add(shoulder, S(0.2), m.belly, [0, -0.62, 0]);
+        arms.push(shoulder);
+      }
+
+      // 발
+      for (const s of [-1, 1]) add(root, S(0.3), m.body, [0.38 * s, 0.17, 0.12], [1, 0.6, 1.35]);
+
+      // 꼬리
+      add(bodyPivot, S(0.2), m.belly, [0, 0.7, -0.78]);
+
+      // 나비넥타이
+      const bow = new THREE.Group();
+      bow.position.set(0, 1.55, 0.6);
+      bodyPivot.add(bow);
+      for (const s of [-1, 1]) {
+        const w = add(bow, new THREE.ConeGeometry(0.16, 0.3, 24), m.accent, [0.15 * s, 0, 0]);
+        w.rotation.z = (Math.PI / 2) * s;
+      }
+      add(bow, S(0.08), m.accent);
+
+      // 풍선
+      const balloon = new THREE.Group();
+      arms[1].add(balloon);
+      balloon.position.set(0, -0.62, 0);
+      const string = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.008, 0.008, 1.6, 6),
+        new THREE.MeshBasicMaterial({ color: '#888' })
+      );
+      string.position.y = 0.8;
+      balloon.add(string);
+      const ballMat = new THREE.MeshPhysicalMaterial({ color: '#ff3d6e', roughness: 0.15, clearcoat: 1, transmission: 0.1 });
+      add(balloon, S(0.38), ballMat, [0, 1.85, 0], [1, 1.15, 1]);
+      add(balloon, new THREE.ConeGeometry(0.06, 0.08, 12), ballMat, [0, 1.42, 0]).rotation.x = Math.PI;
+
+      root.traverse(o => { if (o.isMesh) o.userData.isMascot = true; });
+      return { bodyPivot, head, ears, eyes, arms, star, balloon };
+    }
+
+    // ---------- 애니메이션 상태 ----------
+    let jumpT = -1, waveT = -1, autoSpin = false, mixer = null;
+    let nextBlink = 2;
+    const clock = new THREE.Clock();
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function animate() {
+      const dt = clock.getDelta();
+      const t = clock.elapsedTime;
+
+      if (current === mascot) {
+        const p = parts;
+        // 숨쉬기 / 통통
+        const breathe = Math.sin(t * 2.5);
+        p.bodyPivot.scale.set(1 + breathe * 0.015, 1 - breathe * 0.015, 1 + breathe * 0.015);
+        p.head.rotation.z = Math.sin(t * 1.3) * 0.06;
+        p.head.rotation.y = Math.sin(t * 0.7) * 0.15;
+        p.ears.forEach((e, i) => (e.rotation.x = Math.sin(t * 3 + i) * 0.08));
+        p.star.rotation.y = t * 2;
+        p.balloon.rotation.z = Math.sin(t * 1.2) * 0.12 - 0.5;
+        p.balloon.rotation.x = Math.sin(t * 0.9) * 0.08;
+
+        // 눈 깜빡임
+        if (t > nextBlink) {
+          const k = (t - nextBlink) / 0.15;
+          const sy = k < 1 ? 1 - Math.sin(k * Math.PI) * 0.9 : 1;
+          p.eyes.forEach(e => (e.scale.y = sy));
+          if (k >= 1) nextBlink = t + 2 + Math.random() * 3;
+        }
+
+        // 점프
+        let y = 0;
+        if (jumpT >= 0) {
+          jumpT += dt;
+          const d = 0.7;
+          const k = jumpT / d;
+          if (k < 1) {
+            y = Math.sin(k * Math.PI) * 1.2;
+            mascot.rotation.y += dt * Math.PI * 2 / d * (k < 1 ? 1 : 0);
+            p.arms.forEach((a, i) => (a.rotation.z = (i ? 1 : -1) * (0.5 + Math.sin(k * Math.PI) * 1.8)));
+          } else {
+            jumpT = -1;
+            burstConfetti();
+          }
+        }
+        mascot.position.y = y;
+
+        // 손 흔들기 (왼팔)
+        if (waveT >= 0) {
+          waveT += dt;
+          if (waveT < 2) p.arms[0].rotation.z = -2.4 + Math.sin(waveT * 14) * 0.35;
+          else waveT = -1;
+        } else if (jumpT < 0) {
+          p.arms[0].rotation.z = THREE.MathUtils.lerp(p.arms[0].rotation.z, -0.5 + Math.sin(t * 2) * 0.05, 0.1);
+          p.arms[1].rotation.z = THREE.MathUtils.lerp(p.arms[1].rotation.z, 0.9, 0.1);
+        }
+      }
+
+      if (mixer) mixer.update(dt);
+      if (autoSpin) current.rotation.y += dt * 0.6;
+      updateConfetti(dt);
+      ferris.rotation.z += dt * 0.15;
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    // ---------- 컨페티 ----------
+    const confetti = [];
+    const confGeo = new THREE.PlaneGeometry(0.08, 0.14);
+    const confColors = ['#ff5d8f', '#ffd23f', '#4fb3ff', '#7ee081', '#b48cff'];
+    function burstConfetti() {
+      for (let i = 0; i < 80; i++) {
+        const m = new THREE.Mesh(confGeo, new THREE.MeshBasicMaterial({ color: confColors[i % 5], side: THREE.DoubleSide }));
+        m.position.set(0, 2.5, 0);
+        const a = Math.random() * Math.PI * 2;
+        const sp = 2 + Math.random() * 3;
+        m.userData.v = new THREE.Vector3(Math.cos(a) * sp, 4 + Math.random() * 4, Math.sin(a) * sp);
+        m.userData.r = new THREE.Vector3(Math.random() * 10, Math.random() * 10, 0);
+        m.userData.life = 2.5;
+        scene.add(m);
+        confetti.push(m);
+      }
+    }
+    function updateConfetti(dt) {
+      for (let i = confetti.length - 1; i >= 0; i--) {
+        const c = confetti[i];
+        c.userData.v.y -= 9 * dt;
+        c.userData.v.multiplyScalar(0.98);
+        c.position.addScaledVector(c.userData.v, dt);
+        c.rotation.x += c.userData.r.x * dt;
+        c.rotation.y += c.userData.r.y * dt;
+        c.userData.life -= dt;
+        if (c.userData.life <= 0 || c.position.y < -0.3) {
+          scene.remove(c);
+          c.material.dispose();
+          confetti.splice(i, 1);
+        }
+      }
+    }
+
+    // ---------- 배경 소품 ----------
+    var ferris;
+    function makeFerrisWheel() {
+      const g = new THREE.Group();
+      g.position.set(-7, 4.5, -9);
+      const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 });
+      ferris = new THREE.Group();
+      g.add(ferris);
+      ferris.add(new THREE.Mesh(new THREE.TorusGeometry(3.5, 0.08, 8, 64), mat));
+      const cabColors = ['#ff6fa1', '#ffd23f', '#4fb3ff', '#7ee081'];
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3.5, 6), mat);
+        spoke.position.set(Math.cos(a) * 1.75, Math.sin(a) * 1.75, 0);
+        spoke.rotation.z = a - Math.PI / 2;
+        ferris.add(spoke);
+        const cab = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12),
+          new THREE.MeshStandardMaterial({ color: cabColors[i % 4] }));
+        cab.position.set(Math.cos(a) * 3.5, Math.sin(a) * 3.5, 0);
+        ferris.add(cab);
+      }
+      for (const s of [-1, 1]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5.2, 8), mat);
+        leg.position.set(1.2 * s, -2.4, 0);
+        leg.rotation.z = 0.25 * s;
+        g.add(leg);
+      }
+      return g;
+    }
+    function makeTower() {
+      const g = new THREE.Group();
+      g.position.set(7, -0.3, -10);
+      const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4 });
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, 9, 24), mat);
+      shaft.position.y = 4.5;
+      g.add(shaft);
+      const deck = new THREE.Mesh(new THREE.SphereGeometry(0.9, 32, 16), new THREE.MeshStandardMaterial({ color: '#4fb3ff', roughness: 0.2, metalness: 0.3 }));
+      deck.position.y = 8.2;
+      deck.scale.y = 0.6;
+      g.add(deck);
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, 2.2, 8), mat);
+      antenna.position.y = 9.8;
+      g.add(antenna);
+      return g;
+    }
+
+    // ---------- 유틸 ----------
+    function makeGradientTexture(top, bottom) {
+      const c = document.createElement('canvas');
+      c.width = 2; c.height = 256;
+      const ctx = c.getContext('2d');
+      const grd = ctx.createLinearGradient(0, 0, 0, 256);
+      grd.addColorStop(0, bottom);
+      grd.addColorStop(1, top);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, 2, 256);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+    function makeStarGeometry(outer, inner, depth) {
+      const shape = new THREE.Shape();
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 ? inner : outer;
+        const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        i ? shape.lineTo(x, y) : shape.moveTo(x, y);
+      }
+      const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01, bevelSegments: 2 });
+      geo.center();
+      return geo;
+    }
+
+    // ---------- UI ----------
+    const palette = ['#ff8fb8', '#ffb347', '#7ccfff', '#9be37a', '#c7a3ff', '#ffffff'];
+    const colorsEl = document.getElementById('colors');
+    palette.forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'swatch';
+      b.style.background = c;
+      b.onclick = () => mats.body.color.set(c);
+      colorsEl.appendChild(b);
+    });
+    document.getElementById('jump').onclick = () => { if (jumpT < 0) jumpT = 0; };
+    document.getElementById('wave').onclick = () => (waveT = 0);
+    document.getElementById('spin').onclick = e => {
+      autoSpin = !autoSpin;
+      e.target.textContent = autoSpin ? '회전 정지' : '자동 회전';
+    };
+    document.getElementById('shot').onclick = () => {
+      const a = document.createElement('a');
+      a.href = renderer.domElement.toDataURL('image/png');
+      a.download = 'mascot.png';
+      a.click();
+    };
+
+    // 캐릭터 클릭 → 점프
+    let downPos = null;
+    renderer.domElement.addEventListener('pointerdown', e => (downPos = [e.clientX, e.clientY]));
+    renderer.domElement.addEventListener('pointerup', e => {
+      if (!downPos || Math.hypot(e.clientX - downPos[0], e.clientY - downPos[1]) > 5) return;
+      pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObject(current, true)[0];
+      if (hit && current === mascot && jumpT < 0) jumpT = 0;
+    });
+
+    // GLB 드래그 앤 드롭 교체
+    const dropEl = document.getElementById('drop');
+    addEventListener('dragover', e => { e.preventDefault(); dropEl.style.display = 'flex'; });
+    addEventListener('dragleave', () => (dropEl.style.display = 'none'));
+    addEventListener('drop', e => {
+      e.preventDefault();
+      dropEl.style.display = 'none';
+      const file = e.dataTransfer.files[0];
+      if (!file || !/\.(glb|gltf)$/i.test(file.name)) return alert('.glb 또는 .gltf 파일을 넣어주세요');
+      const url = URL.createObjectURL(file);
+      new GLTFLoader().load(url, gltf => {
+        const model = gltf.scene;
+        // 크기를 약 3.2 높이로 맞추고 바닥에 세우기
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        model.scale.setScalar(3.2 / Math.max(size.x, size.y, size.z));
+        const box2 = new THREE.Box3().setFromObject(model);
+        const center = box2.getCenter(new THREE.Vector3());
+        model.position.sub(new THREE.Vector3(center.x, box2.min.y, center.z));
+        const wrap = new THREE.Group();
+        wrap.add(model);
+        model.traverse(o => { if (o.isMesh) o.castShadow = true; });
+        if (gltf.animations.length) {
+          mixer = new THREE.AnimationMixer(model);
+          mixer.clipAction(gltf.animations[0]).play();
+        }
+        scene.remove(current);
+        scene.add(wrap);
+        current = wrap;
+        URL.revokeObjectURL(url);
+      }, undefined, err => alert('모델 로드 실패: ' + err.message));
+    });
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
