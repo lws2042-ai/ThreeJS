@@ -609,54 +609,111 @@
       button: new THREE.SphereGeometry(0.01, 6, 6),
     };
     const SKIN = ['#fbe3cf', '#f7d8bd', '#f3cfae', '#f0c6a0'];
+    const SKIN_B = ['#f7d8bd', '#f0c6a0', '#e8b48a', '#dba57a', '#f3cfae'];      // 남학생: 햇볕에 그을린 톤 포함
     const HAIR = ['#3b2a20', '#2a1f1a', '#5a3a22', '#6b4a2b', '#3b2a20'];
+    const HAIR_B = ['#1c1714', '#2a1f1a', '#3b2a20', '#5a3a22', '#7a4528'];
     const OUTFIT = {
       sailor:   { top: '#fbfaf5', bottom: '#34466b' },           // 세일러복 (흰 상의 + 남색 깃, 빨간 스카프)
       cardigan: { top: '#d9c7a3', bottom: '#34466b' },           // 베이지 가디건
       sage:     { top: '#a9c2a0', bottom: '#5b5f6b' },           // 연두 니트
       shirt:    { top: '#fbfaf5', bottom: '#b49a6c' },           // 흰 셔츠 + 멜빵 + 반바지
-      sky:      { top: '#a8c4e0', bottom: '#5b5f6b' },           // 하늘색 셔츠
+      sky:      { top: '#a8c4e0', bottom: '#4a4f5c' },           // 하늘색 셔츠 + 긴바지
+      jacket:   { top: '#2f3e5c', bottom: '#2f3e5c' },           // 남색 교복 재킷 (금단추)
+      track:    { top: '#3a7d5c', bottom: '#3a7d5c' },           // 초록 체육복
     };
+    // 남학생 전용 부위
+    Object.assign(SG, {
+      jaw: new THREE.SphereGeometry(0.1, 18, 12),
+      capS: new THREE.SphereGeometry(0.143, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      browB: cap(0.009, 0.045),
+      nose: new THREE.SphereGeometry(0.013, 10, 8),
+      freckle: new THREE.SphereGeometry(0.0045, 6, 4),
+      bandaid: new THREE.BoxGeometry(0.05, 0.016, 0.006),
+      mouthW: new THREE.TorusGeometry(0.022, 0.005, 6, 12, Math.PI),
+      mouthLine: new THREE.BoxGeometry(0.036, 0.006, 0.006),
+      mouthOpen: new THREE.SphereGeometry(0.02, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+      square: new THREE.TorusGeometry(0.031, 0.005, 4, 4),
+      fringe: new THREE.BoxGeometry(0.22, 0.045, 0.05),
+      stripe: new THREE.BoxGeometry(0.015, 0.4, 0.01),
+    });
+    const BOY_HAIR = ['spiky', 'side', 'buzz', 'messy', 'quiff', 'bowl'];
+    const BOY_OUT = ['shirt', 'jacket', 'sky', 'track', 'cardigan', 'jacket'];
     const students = [];
+    let boyCount = 0;
+    const UP = new THREE.Vector3(0, 1, 0);
 
     function makeStudent(chair) {
-      const girl = rand() < 0.5;
+      const girl = students.length % 2 === 1;                  // 남녀가 번갈아 앉음
       const pickArr = a => a[Math.floor(rand() * a.length)];
-      const style = girl ? pickArr(['sailor', 'sailor', 'cardigan', 'sage']) : pickArr(['shirt', 'shirt', 'sky', 'cardigan']);
+      const bi = girl ? 0 : boyCount++;
+      const style = girl ? pickArr(['sailor', 'sailor', 'cardigan', 'sage']) : BOY_OUT[(bi + Math.floor(rand() * 2)) % BOY_OUT.length];
       const O = OUTFIT[style];
-      const skin = toon(pickArr(SKIN)), hair = toon(pickArr(HAIR));
+      const skinHex = girl ? pickArr(SKIN) : pickArr(SKIN_B);
+      const skin = toon(skinHex), hair = toon(girl ? pickArr(HAIR) : pickArr(HAIR_B));
       const top = toon(O.top), bottom = toon(O.bottom), dark = toon('#2b1d14');
       const root = new THREE.Group();
       chair.add(root);                                         // 의자를 따라 움직임 (앞 = -Z)
 
-      // 다리 (앉은 자세)
+      // 다리 (앉은 자세) — 남학생은 반바지(셔츠+멜빵)가 아니면 긴바지
+      const longPants = !girl && style !== 'shirt';
       for (const s of [-1, 1]) {
         part(root, SG.thigh, girl ? skin : bottom, 0.08 * s, 0.52, -0.16, Math.PI / 2);
-        part(root, SG.shin, skin, 0.08 * s, 0.29, -0.33);
-        if (girl || rand() < 0.5) part(root, SG.sock, toon('#ffffff'), 0.08 * s, 0.11, -0.33);
-        part(root, SG.shoe, toon(girl ? '#6b3e26' : '#4a3a30'), 0.08 * s, 0.04, -0.36).scale.set(1, 0.6, 1.5);
+        part(root, SG.shin, longPants ? bottom : skin, 0.08 * s, 0.29, -0.33);
+        if (girl || (!longPants && rand() < 0.6)) part(root, SG.sock, toon('#ffffff'), 0.08 * s, 0.11, -0.33);
+        part(root, SG.shoe, toon(girl ? '#6b3e26' : pickArr(['#4a3a30', '#2b2d33', '#f2f2ee'])), 0.08 * s, 0.04, -0.36).scale.set(girl ? 1 : 1.1, 0.6, girl ? 1.5 : 1.65);
       }
 
-      // 몸통
+      // 몸통 — 남학생은 어깨가 조금 더 넓음
       const torso = new THREE.Group();
       torso.position.set(0, 0.5, 0.05);
       root.add(torso);
-      part(torso, SG.torso, top, 0, 0.25, 0).scale.set(1, 1, 0.75);
+      part(torso, SG.torso, top, 0, 0.25, 0).scale.set(girl ? 1 : 1.12, 1, 0.75);
       if (girl) part(torso, SG.skirt, bottom, 0, 0.02, -0.03).scale.z = 0.95;
       if (style === 'sailor') {
         part(torso, SG.collarBack, toon('#34466b'), 0, 0.4, 0.1).rotation.x = -0.3;
         part(torso, SG.scarf, toon('#c8473d'), 0, 0.37, -0.115).rotation.x = Math.PI;
       } else if (style === 'shirt') {
         for (const s of [-1, 1]) part(torso, SG.strap, toon('#6b4a2b'), 0.07 * s, 0.25, -0.108);
+      } else if (style === 'jacket') {
+        part(torso, SG.collarBack, toon('#fbfaf5'), 0, 0.45, -0.06).scale.set(0.5, 0.4, 1);
+        for (let i = 0; i < 4; i++) part(torso, SG.button, toon('#d4a843'), 0, 0.4 - i * 0.075, -0.108);
+      } else if (style === 'track') {
+        for (const s of [-1, 1]) part(torso, SG.stripe, toon('#ffffff'), 0.135 * s, 0.25, -0.03);
+        part(torso, SG.stripe, toon('#e9e4d8'), 0, 0.25, -0.108).scale.set(0.4, 1, 1);  // 지퍼
       } else {
         for (let i = 0; i < 3; i++) part(torso, SG.button, toon('#8a6a4a'), 0, 0.38 - i * 0.08, -0.108);
       }
       part(torso, SG.neck, skin, 0, 0.52, 0);
 
-      // 머리 (큰 머리 + 동그란 얼굴)
+      // 머리
       const head = new THREE.Group();
       head.position.set(0, 0.64, -0.01);
       torso.add(head);
+      if (girl) buildGirlFace(head, skin, hair, dark);
+      else buildBoyFace(head, skin, skinHex, hair, dark, BOY_HAIR[bi % BOY_HAIR.length]);
+
+      // 팔: 어깨 → 팔꿈치 → 손 (책상 위에 올린 자세)
+      const arms = [-1, 1].map(s => {
+        const shoulder = new THREE.Group();
+        shoulder.position.set((girl ? 0.17 : 0.19) * s, 0.42, 0);
+        shoulder.rotation.x = 0.25;
+        torso.add(shoulder);
+        part(shoulder, SG.upper, top, 0, -0.11, 0);
+        const elbow = new THREE.Group();
+        elbow.position.y = -0.22;
+        elbow.rotation.x = 1.6;
+        shoulder.add(elbow);
+        part(elbow, SG.fore, style === 'shirt' || style === 'sky' ? skin : top, 0, -0.11, 0);   // 셔츠는 소매 걷음
+        part(elbow, SG.hand, skin, 0, -0.24, 0);
+        return { shoulder, elbow };
+      });
+
+      addOutlines(root);
+      root.traverse(o => { if (o.isMesh) o.userData.student = students.length; });
+      return { root, chair, torso, head, arms, phase: rand() * 10, raise: 0, look: 'teacher', lookT: 2 + rand() * 6 };
+    }
+
+    function buildGirlFace(head, skin, hair, dark) {
       part(head, SG.head, skin, 0, 0, 0).scale.set(1.05, 1, 1);
       for (const s of [-1, 1]) {
         part(head, SG.eye, dark, 0.048 * s, -0.005, -0.122).scale.set(0.8, 1.25, 0.5);  // 까만 눈
@@ -666,52 +723,112 @@
         part(head, SG.ear, skin, 0.14 * s, -0.01, 0);
       }
       part(head, SG.mouth, toon('#a5523f'), 0, -0.062, -0.127).rotation.z = Math.PI;   // 살짝 웃는 입
-
-      // 머리카락: 둥근 캡 + 덩어리진 앞머리
       const hcap = part(head, SG.hairCap, hair, 0, 0.012, 0.012);
       hcap.scale.set(1.06, 1, 1.04);
       hcap.rotation.x = 0.38;                                  // 뒤로 기울여 이마·눈이 보이게
-      const nb = 5;
-      for (let i = 0; i < nb; i++) {
-        const a = (i / (nb - 1) - 0.5) * 1.5;
+      for (let i = 0; i < 5; i++) {                            // 덩어리진 앞머리
+        const a = (i / 4 - 0.5) * 1.5;
         const b = part(head, SG.bang, hair, Math.sin(a) * 0.112, 0.1 - Math.abs(a) * 0.025, -Math.cos(a) * 0.108);
         b.scale.set(1, 1.05, 0.7);
         b.rotation.z = -a * 0.5;
       }
-      if (girl) {
-        const long = rand() < 0.5;
-        for (const s of [-1, 1]) {                             // 단발 옆머리
-          part(head, SG.lock, hair, 0.115 * s, long ? -0.07 : -0.03, 0.02).scale.set(0.6, long ? 1.9 : 1.3, 1.1);
-        }
-        if (long) part(head, SG.lock, hair, 0, -0.08, 0.09).scale.set(1.9, 2.0, 0.8);    // 긴 뒷머리
-        else if (rand() < 0.5) for (const s of [-1, 1]) part(head, SG.bun, hair, 0.13 * s, 0.03, 0.08); // 양갈래
-      } else {
-        part(head, SG.lock, hair, 0, -0.02, 0.08).scale.set(2.0, 1.4, 1.2);              // 뒷머리
-        for (let i = 0; i < 3; i++) {                          // 삐죽한 머리끝
-          const tf = part(head, SG.tuft, hair, (i - 1) * 0.05, 0.14, 0.02 + (i % 2) * 0.03);
-          tf.rotation.set(-0.3, 0, (i - 1) * -0.5);
-        }
+      const long = rand() < 0.5;
+      for (const s of [-1, 1]) part(head, SG.lock, hair, 0.115 * s, long ? -0.07 : -0.03, 0.02).scale.set(0.6, long ? 1.9 : 1.3, 1.1);
+      if (long) part(head, SG.lock, hair, 0, -0.08, 0.09).scale.set(1.9, 2.0, 0.8);      // 긴 뒷머리
+      else if (rand() < 0.5) for (const s of [-1, 1]) part(head, SG.bun, hair, 0.13 * s, 0.03, 0.08); // 양갈래
+    }
+
+    // 남학생 얼굴: 각진 턱, 굵은 눈썹, 작은 눈, 코. 머리 모양·표정·소품을 조합해 개성 있게
+    function buildBoyFace(head, skin, skinHex, hair, dark, hairStyle) {
+      const pickArr = a => a[Math.floor(rand() * a.length)];
+      part(head, SG.head, skin, 0, 0.005, 0);
+      part(head, SG.jaw, skin, 0, -0.058, -0.012).scale.set(1.08, 0.78, 0.98);         // 각진 턱선
+      const shade = toon('#' + new THREE.Color(skinHex).multiplyScalar(0.86).getHexString());
+
+      // 눈: 보통 / 가는 눈 / 동그란 눈
+      const eyeType = pickArr(['normal', 'narrow', 'normal', 'round']);
+      const eyeScale = { normal: [0.68, 0.95, 0.5], narrow: [0.85, 0.5, 0.5], round: [0.78, 1.1, 0.5] }[eyeType];
+      // 눈썹: 짙고 굵게, 각도로 성격 표현 (당찬 / 차분 / 장난)
+      const browTilt = pickArr([-0.28, 0, 0.18, -0.15]);
+      for (const s of [-1, 1]) {
+        part(head, SG.eye, dark, 0.046 * s, -0.004, -0.123).scale.set(...eyeScale);
+        if (eyeType !== 'narrow') part(head, SG.shine, toon('#ffffff'), 0.046 * s + 0.005, 0.004, -0.131).scale.setScalar(0.8);
+        const br = part(head, SG.browB, hair, 0.05 * s, 0.043, -0.126);
+        br.rotation.z = Math.PI / 2 + browTilt * s;
+        br.userData.noOutline = true;
+        part(head, SG.ear, skin, 0.138 * s, -0.012, 0).scale.set(1.1, 1.2, 1);
       }
+      part(head, SG.nose, shade, 0, -0.03, -0.132).scale.set(1, 1.2, 0.8);              // 코
 
-      // 팔: 어깨 → 팔꿈치 → 손 (책상 위에 올린 자세)
-      const arms = [-1, 1].map(s => {
-        const shoulder = new THREE.Group();
-        shoulder.position.set(0.17 * s, 0.42, 0);
-        shoulder.rotation.x = 0.25;
-        torso.add(shoulder);
-        part(shoulder, SG.upper, top, 0, -0.11, 0);
-        const elbow = new THREE.Group();
-        elbow.position.y = -0.22;
-        elbow.rotation.x = 1.6;
-        shoulder.add(elbow);
-        part(elbow, SG.fore, style === 'shirt' || style === 'sky' ? skin : top, 0, -0.11, 0);
-        part(elbow, SG.hand, skin, 0, -0.24, 0);
-        return { shoulder, elbow };
-      });
+      // 입: 씩 웃음 / 일자 / 크게 웃음 / 한쪽 미소
+      const mouthType = pickArr(['grin', 'flat', 'open', 'smirk', 'grin']);
+      const mc = toon('#8a3b2e');
+      if (mouthType === 'grin') part(head, SG.mouthW, mc, 0, -0.06, -0.126).rotation.z = Math.PI;
+      else if (mouthType === 'flat') part(head, SG.mouthLine, mc, 0, -0.068, -0.127);
+      else if (mouthType === 'open') part(head, SG.mouthOpen, mc, 0, -0.062, -0.122).scale.set(1.25, 1, 0.5);
+      else { const m = part(head, SG.mouth, mc, 0.012, -0.064, -0.126); m.rotation.z = Math.PI + 0.45; }
 
-      addOutlines(root);
-      root.traverse(o => { if (o.isMesh) o.userData.student = students.length; });
-      return { root, chair, torso, head, arms, phase: rand() * 10, raise: 0, look: 'teacher', lookT: 2 + rand() * 6 };
+      // 개성 소품
+      if (rand() < 0.3) for (const s of [-1, 1]) for (let i = 0; i < 3; i++)                // 주근깨
+        part(head, SG.freckle, toon('#a0683f'), (0.068 + i * 0.011) * s, -0.03 - (i % 2) * 0.008, -0.118 + i * 0.004);
+      if (rand() < 0.22) {                                                                  // 반창고
+        const b = part(head, SG.bandaid, toon('#f0cfa0'), pickArr([-1, 1]) * 0.075, -0.04, -0.113);
+        b.rotation.set(0, 0, 0.35);
+      }
+      if (rand() < 0.22) {                                                                  // 사각 안경
+        for (const s of [-1, 1]) {
+          const g = part(head, SG.square, toon('#2b2b2b'), 0.046 * s, -0.004, -0.14);
+          g.rotation.z = Math.PI / 4;
+          g.scale.set(1.25, 1, 1);
+          g.userData.noOutline = true;
+        }
+        part(head, SG.mouthLine, toon('#2b2b2b'), 0, 0.0, -0.142).scale.set(0.6, 1, 1);
+      }
+      if (rand() < 0.15) for (const s of [-1, 1])                                           // 살짝 붉은 볼 (운동하고 온 느낌)
+        part(head, SG.cheek, toon('#e8a08a'), 0.08 * s, -0.045, -0.105).scale.set(0.8, 0.4, 0.3);
+
+      // 머리 모양
+      const hcap = part(head, SG.capS, hair, 0, 0.012, 0.012);
+      hcap.scale.set(1.05, 1, 1.04);
+      hcap.rotation.x = 0.32;
+      part(head, SG.lock, hair, 0, -0.035, 0.085).scale.set(1.9, 1.15, 1.1);           // 뒷머리(목덜미)
+      const pointCone = (x, y, z, len = 1) => {                // 바깥쪽을 향해 뻗친 머리끝
+        const c = part(head, SG.tuft, hair, x, y, z);
+        c.quaternion.setFromUnitVectors(UP, new THREE.Vector3(x, y + 0.05, z).normalize());
+        c.scale.set(1, len, 1);
+      };
+      if (hairStyle === 'spiky') {                             // 삐죽삐죽
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2;
+          pointCone(Math.sin(a) * 0.085, 0.118, Math.cos(a) * 0.085 - 0.01, 1.2 + rand() * 0.4);
+        }
+        pointCone(0, 0.148, 0, 1.4);
+        for (const x of [-0.05, 0.02, 0.07]) pointCone(x, 0.095, -0.11, 1.1);
+      } else if (hairStyle === 'side') {                       // 옆가르마로 넘긴 앞머리
+        const f = part(head, SG.lock, hair, -0.025, 0.098, -0.098);
+        f.scale.set(2.3, 0.75, 0.75); f.rotation.z = 0.32;
+        const f2 = part(head, SG.lock, hair, 0.085, 0.1, -0.075);
+        f2.scale.set(0.9, 0.7, 0.8);
+      } else if (hairStyle === 'buzz') {                       // 짧은 스포츠머리
+        hcap.scale.set(1.0, 0.97, 1.0);
+        for (const x of [-0.06, -0.02, 0.02, 0.06]) part(head, SG.bang, hair, x, 0.108, -0.1).scale.set(0.8, 0.55, 0.5);
+      } else if (hairStyle === 'messy') {                      // 부스스한 머리
+        for (let i = 0; i < 9; i++) {
+          const a = rand() * Math.PI * 2, el = 0.35 + rand() * 0.5;
+          const l = part(head, SG.lock, hair, Math.sin(a) * Math.cos(el) * 0.13, 0.05 + Math.sin(el) * 0.1, Math.cos(a) * Math.cos(el) * 0.12);
+          l.scale.setScalar(0.55 + rand() * 0.35);
+        }
+        for (let i = 0; i < 3; i++) pointCone((rand() - 0.5) * 0.14, 0.13, (rand() - 0.5) * 0.1, 0.9);
+        for (const x of [-0.06, 0, 0.06]) part(head, SG.bang, hair, x, 0.098, -0.108).scale.set(0.9, 0.9, 0.6);
+      } else if (hairStyle === 'quiff') {                      // 앞머리를 세운 머리
+        for (const [x, len] of [[-0.05, 1.3], [0, 1.7], [0.05, 1.4]]) pointCone(x, 0.125, -0.085, len);
+        for (const s2 of [-1, 1]) pointCone(0.09 * s2, 0.1, -0.03, 1.0);
+      } else {                                                 // 바가지 머리 (일자 앞머리)
+        hcap.rotation.x = 0.18;
+        hcap.scale.set(1.08, 1.02, 1.06);
+        for (let i = 0; i < 6; i++) part(head, SG.bang, hair, -0.1 + i * 0.04, 0.085, -0.112 + Math.abs(i - 2.5) * 0.006).scale.set(1.0, 0.75, 0.6);
+        for (const s of [-1, 1]) part(head, SG.lock, hair, 0.122 * s, 0.0, 0.0).scale.set(0.45, 1.0, 1.0);
+      }
     }
 
     for (let c = 0; c < 6; c++) {
